@@ -15,8 +15,10 @@ CONDA_ENV="${CONDA_ENV:-aflow}"
 MODEL_PATH="${MODEL_PATH:-${REPO_DIR}/../SimpleMem/weights/Qwen3-8B}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-Qwen3-8B}"
 PORT="${PORT:-8000}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-9182}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
+GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.75}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-1}"
+MAX_TOKENS="${MAX_TOKENS:-2048}"
 MAX_CONCURRENT_TASKS="${MAX_CONCURRENT_TASKS:-1}"
 LOG_ROOT="${LOG_ROOT:-experiments/baseline_vllm_qwen3_8b}"
 MATH_PATH="${MATH_PATH:-data/datasets/math_validate.jsonl}"
@@ -79,6 +81,7 @@ models:
     api_key: "EMPTY"
     temperature: 0.6
     top_p: 0.95
+    max_tokens: ${MAX_TOKENS}
     extra_body:
       chat_template_kwargs:
         enable_thinking: true
@@ -94,7 +97,9 @@ vllm serve "${MODEL_PATH}" \
     --host 127.0.0.1 \
     --port "${PORT}" \
     --max-model-len "${MAX_MODEL_LEN}" \
+    --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" \
     --max-num-seqs "${MAX_NUM_SEQS}" \
+    --enforce-eager \
     --trust-remote-code \
     > "${VLLM_LOG}" 2>&1 &
 

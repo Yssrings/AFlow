@@ -17,6 +17,7 @@ class LLMConfig:
         self.key = config.get("key", None)
         self.base_url = config.get("base_url", "https://oneapi.deepwisdom.ai/v1")
         self.top_p = config.get("top_p", 1)
+        self.max_tokens = config.get("max_tokens", None)
         self.extra_body = config.get("extra_body", None)
 
 class LLMsConfig:
@@ -75,6 +76,7 @@ class LLMsConfig:
             "key": config.get("api_key"),  # Map api_key to key
             "base_url": config.get("base_url", "https://oneapi.deepwisdom.ai/v1"),
             "top_p": config.get("top_p", 1),  # Add top_p parameter
+            "max_tokens": config.get("max_tokens", None),
             "extra_body": config.get("extra_body", None),
         }
         
@@ -199,6 +201,8 @@ class AsyncLLM:
             "temperature": self.config.temperature,
             "top_p": self.config.top_p,
         }
+        if self.config.max_tokens is not None:
+            request_kwargs["max_tokens"] = self.config.max_tokens
         if self.config.extra_body:
             request_kwargs["extra_body"] = self.config.extra_body
 
