@@ -80,6 +80,9 @@ models:
     api_key: "EMPTY"
     temperature: 0.6
     top_p: 0.95
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: true
 EOF
 
 mkdir -p logs "${LOG_ROOT}"
@@ -93,7 +96,6 @@ vllm serve "${MODEL_PATH}" \
     --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" \
     --max-num-seqs "${MAX_NUM_SEQS}" \
     --trust-remote-code \
-    --default-chat-template-kwargs '{"enable_thinking": true}' \
     > "logs/vllm_${SERVED_MODEL_NAME}_baseline.log" 2>&1 &
 
 VLLM_PID=$!

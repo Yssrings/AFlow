@@ -17,6 +17,7 @@ class LLMConfig:
         self.key = config.get("key", None)
         self.base_url = config.get("base_url", "https://oneapi.deepwisdom.ai/v1")
         self.top_p = config.get("top_p", 1)
+        self.extra_body = config.get("extra_body", None)
 
 class LLMsConfig:
     """Configuration manager for multiple LLM configurations"""
@@ -73,7 +74,8 @@ class LLMsConfig:
             "temperature": config.get("temperature", 1),
             "key": config.get("api_key"),  # Map api_key to key
             "base_url": config.get("base_url", "https://oneapi.deepwisdom.ai/v1"),
-            "top_p": config.get("top_p", 1)  # Add top_p parameter
+            "top_p": config.get("top_p", 1),  # Add top_p parameter
+            "extra_body": config.get("extra_body", None),
         }
         
         # Create and return an LLMConfig instance with the specified configuration
@@ -191,12 +193,16 @@ class AsyncLLM:
 
         message.append({"role": "user", "content": prompt})
 
-        response = await self.aclient.chat.completions.create(
-            model=self.config.model,
-            messages=message,
-            temperature=self.config.temperature,
-            top_p = self.config.top_p,
-        )
+        request_kwargs = {
+            "model": self.config.model,
+            "messages": message,
+            "temperature": self.config.temperature,
+            "top_p": self.config.top_p,
+        }
+        if self.config.extra_body:
+            request_kwargs["extra_body"] = self.config.extra_body
+
+        response = await self.aclient.chat.completions.create(**request_kwargs)
 
         # Extract token usage from response
         input_tokens = response.usage.prompt_tokens
