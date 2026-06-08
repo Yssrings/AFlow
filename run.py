@@ -85,13 +85,13 @@ def parse_args():
     parser.add_argument(
         "--opt_model_name",
         type=str,
-        default="claude-3-5-sonnet-20241022",
+        default="kimi-k2.5",
         help="Specifies the name of the model used for optimization tasks.",
     )
     parser.add_argument(
         "--exec_model_name",
         type=str,
-        default="gpt-4o-mini",
+        default="kimi-k2.5",
         help="Specifies the name of the model used for execution tasks.",
     )
     return parser.parse_args()
