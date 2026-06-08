@@ -13,21 +13,26 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from benchmarks.humaneval import HumanEvalBenchmark
+from benchmarks.math import MATHBenchmark
 from scripts.async_llm import LLMsConfig, create_llm_instance
-from scripts.operators import CustomCodeGenerate
+from scripts.operators import AnswerGenerate, CustomCodeGenerate
 from scripts.workflow import Workflow
 
 
-# class MathCoTWorkflow(Workflow):
-#     def __init__(self, name: str, llm_config, dataset: str):
-#         self.name = name
-#         self.dataset = dataset
-#         self.llm = create_llm_instance(llm_config)
-#         self.response = AnswerGenerate(self.llm)
-#
-#     async def __call__(self, problem: str):
-#         solution = await self.response(input=problem)
-#         return solution["answer"], self.llm.get_usage_summary()["total_cost"]
+class MathCoTWorkflow(Workflow):
+    def __init__(self, name: str, llm_config, dataset: str):
+        self.name = name
+        self.dataset = dataset
+        self.llm = create_llm_instance(llm_config)
+        self.response = AnswerGenerate(self.llm)
+
+    async def __call__(self, problem: str):
+        solution = await self.response(input=problem)
+        answer = solution.get("answer", "")
+        thought = solution.get("thought", "")
+        final_answer = answer if "\\boxed" in answer else f"\\boxed{{{answer}}}"
+        prediction = f"{thought}\n\nFinal answer: {final_answer}" if thought else final_answer
+        return prediction, self.llm.get_usage_summary()["total_cost"]
 
 
 CODE_COT_INSTRUCTION = (
@@ -63,6 +68,7 @@ def _parse_list(value: str) -> List[str]:
 
 async def run_baseline_for_model(
     model_name: str,
+    math_path: str,
     humaneval_path: str,
     log_root: str,
     max_concurrent_tasks: int,
@@ -70,14 +76,14 @@ async def run_baseline_for_model(
     models_config = LLMsConfig.default()
     llm_config = models_config.get(model_name)
 
-    # MATH baseline is intentionally disabled for single-base-model code evaluation.
-    # math_log_path = os.path.join(log_root, "MATH", model_name)
-    # _ensure_dir(math_log_path)
-    # math_benchmark = MATHBenchmark(name="MATH", file_path=math_path, log_path=math_log_path)
-    # math_workflow = MathCoTWorkflow(name="math_baseline", llm_config=llm_config, dataset="MATH")
-    # await math_benchmark.run_baseline(math_workflow, max_concurrent_tasks=max_concurrent_tasks)
+    # MATH baseline with explicit CoT and Qwen3 enable-thinking from the vLLM server.
+    math_log_path = os.path.join(log_root, "MATH", model_name)
+    _ensure_dir(math_log_path)
+    math_benchmark = MATHBenchmark(name="MATH", file_path=math_path, log_path=math_log_path)
+    math_workflow = MathCoTWorkflow(name="math_baseline", llm_config=llm_config, dataset="MATH")
+    await math_benchmark.run_baseline(math_workflow, max_concurrent_tasks=max_concurrent_tasks)
 
-    # HumanEval (code baseline with explicit CoT instruction)
+    # HumanEval baseline with explicit CoT and Qwen3 enable-thinking from the vLLM server.
     humaneval_log_path = os.path.join(log_root, "HumanEval", model_name)
     _ensure_dir(humaneval_log_path)
     humaneval_benchmark = HumanEvalBenchmark(
@@ -97,12 +103,12 @@ async def main():
         required=True,
         help="Comma-separated model names from config/config2.yaml",
     )
-    # parser.add_argument(
-    #     "--math_path",
-    #     type=str,
-    #     default="data/datasets/math_validate.jsonl",
-    #     help="Path to MATH jsonl (e.g., MATH-500 file)",
-    # )
+    parser.add_argument(
+        "--math_path",
+        type=str,
+        default="data/datasets/math_validate.jsonl",
+        help="Path to MATH jsonl (e.g., MATH-500 file)",
+    )
     parser.add_argument(
         "--humaneval_path",
         type=str,
@@ -129,6 +135,7 @@ async def main():
     for model_name in model_names:
         await run_baseline_for_model(
             model_name=model_name,
+            math_path=args.math_path,
             humaneval_path=args.humaneval_path,
             log_root=args.log_root,
             max_concurrent_tasks=args.max_concurrent_tasks,

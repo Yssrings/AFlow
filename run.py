@@ -85,13 +85,13 @@ def parse_args():
     parser.add_argument(
         "--opt_model_name",
         type=str,
-        default="kimi-k2.5",
+        default="Qwen3-8B",
         help="Specifies the name of the model used for optimization tasks.",
     )
     parser.add_argument(
         "--exec_model_name",
         type=str,
-        default="kimi-k2.5",
+        default="Qwen3-8B",
         help="Specifies the name of the model used for execution tasks.",
     )
     return parser.parse_args()
