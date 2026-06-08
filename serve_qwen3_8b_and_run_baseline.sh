@@ -15,10 +15,9 @@ CONDA_ENV="${CONDA_ENV:-aflow}"
 MODEL_PATH="${MODEL_PATH:-${REPO_DIR}/../SimpleMem/weights/Qwen3-8B}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-Qwen3-8B}"
 PORT="${PORT:-8000}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-16384}"
-GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.90}"
-MAX_NUM_SEQS="${MAX_NUM_SEQS:-16}"
-MAX_CONCURRENT_TASKS="${MAX_CONCURRENT_TASKS:-8}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-9182}"
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-1}"
+MAX_CONCURRENT_TASKS="${MAX_CONCURRENT_TASKS:-1}"
 LOG_ROOT="${LOG_ROOT:-experiments/baseline_vllm_qwen3_8b}"
 MATH_PATH="${MATH_PATH:-data/datasets/math_validate.jsonl}"
 HUMANEVAL_PATH="${HUMANEVAL_PATH:-data/datasets/humaneval_validate.jsonl}"
@@ -86,17 +85,18 @@ models:
 EOF
 
 mkdir -p logs "${LOG_ROOT}"
+VLLM_LOG="${REPO_DIR}/logs/vllm_${SERVED_MODEL_NAME}_baseline.log"
+touch "${VLLM_LOG}"
+echo "vLLM log: ${VLLM_LOG}"
 
 vllm serve "${MODEL_PATH}" \
     --served-model-name "${SERVED_MODEL_NAME}" \
     --host 127.0.0.1 \
     --port "${PORT}" \
-    --dtype float16 \
     --max-model-len "${MAX_MODEL_LEN}" \
-    --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" \
     --max-num-seqs "${MAX_NUM_SEQS}" \
     --trust-remote-code \
-    > "logs/vllm_${SERVED_MODEL_NAME}_baseline.log" 2>&1 &
+    > "${VLLM_LOG}" 2>&1 &
 
 VLLM_PID=$!
 echo "vLLM PID: ${VLLM_PID}"
@@ -105,10 +105,10 @@ echo "Waiting for vLLM server..."
 for i in {1..180}; do
     if ! kill -0 "${VLLM_PID}" 2>/dev/null; then
         echo "vLLM exited before becoming ready. Last log lines:" >&2
-        tail -n 80 "logs/vllm_${SERVED_MODEL_NAME}_baseline.log" >&2 || true
+        tail -n 80 "${VLLM_LOG}" >&2 || true
         exit 1
     fi
-    if curl -fsS "http://127.0.0.1:${PORT}/v1/models" >/dev/null; then
+    if curl -fs "http://127.0.0.1:${PORT}/v1/models" >/dev/null 2>&1; then
         echo "vLLM is ready."
         break
     fi

@@ -15,15 +15,15 @@ CONDA_ENV="${CONDA_ENV:-aflow}"
 MODEL_PATH="${MODEL_PATH:-${REPO_DIR}/../SimpleMem/weights/Qwen3-8B}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-Qwen3-8B}"
 PORT="${PORT:-8000}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-16384}"
-GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.90}"
-MAX_NUM_SEQS="${MAX_NUM_SEQS:-16}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-9182}"
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-1}"
 
 AFLOW_DATASET="${AFLOW_DATASET:-HumanEval}"
 AFLOW_SAMPLE="${AFLOW_SAMPLE:-2}"
 AFLOW_INITIAL_ROUND="${AFLOW_INITIAL_ROUND:-1}"
 AFLOW_MAX_ROUNDS="${AFLOW_MAX_ROUNDS:-3}"
 AFLOW_VALIDATION_ROUNDS="${AFLOW_VALIDATION_ROUNDS:-1}"
+AFLOW_MAX_CONCURRENT_TASKS="${AFLOW_MAX_CONCURRENT_TASKS:-1}"
 AFLOW_OPTIMIZED_PATH="${AFLOW_OPTIMIZED_PATH:-workspace_vllm_qwen3_8b}"
 
 cd "${REPO_DIR}"
@@ -85,17 +85,18 @@ models:
 EOF
 
 mkdir -p logs "${AFLOW_OPTIMIZED_PATH}"
+VLLM_LOG="${REPO_DIR}/logs/vllm_${SERVED_MODEL_NAME}_aflow.log"
+touch "${VLLM_LOG}"
+echo "vLLM log: ${VLLM_LOG}"
 
 vllm serve "${MODEL_PATH}" \
     --served-model-name "${SERVED_MODEL_NAME}" \
     --host 127.0.0.1 \
     --port "${PORT}" \
-    --dtype float16 \
     --max-model-len "${MAX_MODEL_LEN}" \
-    --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" \
     --max-num-seqs "${MAX_NUM_SEQS}" \
     --trust-remote-code \
-    > "logs/vllm_${SERVED_MODEL_NAME}_aflow.log" 2>&1 &
+    > "${VLLM_LOG}" 2>&1 &
 
 VLLM_PID=$!
 echo "vLLM PID: ${VLLM_PID}"
@@ -104,10 +105,10 @@ echo "Waiting for vLLM server..."
 for i in {1..180}; do
     if ! kill -0 "${VLLM_PID}" 2>/dev/null; then
         echo "vLLM exited before becoming ready. Last log lines:" >&2
-        tail -n 80 "logs/vllm_${SERVED_MODEL_NAME}_aflow.log" >&2 || true
+        tail -n 80 "${VLLM_LOG}" >&2 || true
         exit 1
     fi
-    if curl -fsS "http://127.0.0.1:${PORT}/v1/models" >/dev/null; then
+    if curl -fs "http://127.0.0.1:${PORT}/v1/models" >/dev/null 2>&1; then
         echo "vLLM is ready."
         break
     fi
@@ -126,6 +127,7 @@ python -u run.py \
     --initial_round "${AFLOW_INITIAL_ROUND}" \
     --max_rounds "${AFLOW_MAX_ROUNDS}" \
     --validation_rounds "${AFLOW_VALIDATION_ROUNDS}" \
+    --max_concurrent_tasks "${AFLOW_MAX_CONCURRENT_TASKS}" \
     --if_force_download false \
     --opt_model_name "${SERVED_MODEL_NAME}" \
     --exec_model_name "${SERVED_MODEL_NAME}"

@@ -43,6 +43,7 @@ class Optimizer:
         initial_round: int = 1,
         max_rounds: int = 20,
         validation_rounds: int = 5,
+        max_concurrent_tasks: int = 50,
     ) -> None:
         self.optimize_llm_config = opt_llm_config
         self.optimize_llm = create_llm_instance(self.optimize_llm_config)
@@ -61,6 +62,7 @@ class Optimizer:
         self.round = initial_round
         self.max_rounds = max_rounds
         self.validation_rounds = validation_rounds
+        self.max_concurrent_tasks = max_concurrent_tasks
 
         self.graph_utils = GraphUtils(self.root_path)
         self.data_utils = DataUtils(self.root_path)

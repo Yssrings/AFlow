@@ -17,6 +17,7 @@ class EvaluationUtils:
                 {"dataset": optimizer.dataset, "llm_config": optimizer.execute_llm_config},
                 directory,
                 is_test=False,
+                max_concurrent_tasks=optimizer.max_concurrent_tasks,
             )
 
             new_data = optimizer.data_utils.create_result_data(optimizer.round, score, avg_cost, total_cost)
@@ -38,6 +39,7 @@ class EvaluationUtils:
                 {"dataset": optimizer.dataset, "llm_config": optimizer.execute_llm_config},
                 directory,
                 is_test=False,
+                max_concurrent_tasks=optimizer.max_concurrent_tasks,
             )
 
             cur_round = optimizer.round + 1 if initial is False else optimizer.round
@@ -60,4 +62,5 @@ class EvaluationUtils:
             {"dataset": optimizer.dataset, "llm_config": optimizer.execute_llm_config},
             directory,
             is_test=is_test,
+            max_concurrent_tasks=optimizer.max_concurrent_tasks,
         )
