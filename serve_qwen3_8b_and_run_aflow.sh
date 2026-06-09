@@ -15,7 +15,7 @@ CONDA_ENV="${CONDA_ENV:-aflow}"
 MODEL_PATH="${MODEL_PATH:-${REPO_DIR}/../SimpleMem/weights/Qwen3-8B}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-Qwen3-8B}"
 PORT="${PORT:-8000}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-6000}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.75}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-1}"
 MAX_TOKENS="${MAX_TOKENS:-2048}"
@@ -27,6 +27,7 @@ AFLOW_MAX_ROUNDS="${AFLOW_MAX_ROUNDS:-3}"
 AFLOW_VALIDATION_ROUNDS="${AFLOW_VALIDATION_ROUNDS:-1}"
 AFLOW_MAX_CONCURRENT_TASKS="${AFLOW_MAX_CONCURRENT_TASKS:-1}"
 AFLOW_OPTIMIZED_PATH="${AFLOW_OPTIMIZED_PATH:-workspace_vllm_qwen3_8b}"
+SOURCE_WORKFLOW_DIR="${SOURCE_WORKFLOW_DIR:-workspace/${AFLOW_DATASET}/workflows}"
 
 cd "${REPO_DIR}"
 source "${CONDA_HOME}/bin/activate" "${CONDA_ENV}"
@@ -52,6 +53,25 @@ fi
 if [[ ! -d "data/datasets" ]]; then
     echo "Missing offline data/datasets directory. Pre-stage AFlow datasets before submitting this job." >&2
     exit 1
+fi
+
+TARGET_WORKFLOW_DIR="${AFLOW_OPTIMIZED_PATH}/${AFLOW_DATASET}/workflows"
+if [[ ! -f "${TARGET_WORKFLOW_DIR}/round_1/graph.py" ]]; then
+    echo "Seeding initial AFlow workflow from ${SOURCE_WORKFLOW_DIR}"
+    if [[ ! -f "${SOURCE_WORKFLOW_DIR}/round_1/graph.py" ]]; then
+        echo "Missing source workflow seed: ${SOURCE_WORKFLOW_DIR}/round_1/graph.py" >&2
+        exit 1
+    fi
+    mkdir -p "${TARGET_WORKFLOW_DIR}"
+    cp -a "${SOURCE_WORKFLOW_DIR}/round_1" "${TARGET_WORKFLOW_DIR}/"
+    cp -a "${SOURCE_WORKFLOW_DIR}/template" "${TARGET_WORKFLOW_DIR}/"
+    touch "${AFLOW_OPTIMIZED_PATH}/__init__.py"
+    mkdir -p "${AFLOW_OPTIMIZED_PATH}/${AFLOW_DATASET}"
+    touch "${AFLOW_OPTIMIZED_PATH}/${AFLOW_DATASET}/__init__.py"
+    touch "${TARGET_WORKFLOW_DIR}/__init__.py"
+    if [[ -f "${TARGET_WORKFLOW_DIR}/results.json" ]]; then
+        mv "${TARGET_WORKFLOW_DIR}/results.json" "${TARGET_WORKFLOW_DIR}/results.json.bak.${SLURM_JOB_ID:-manual}"
+    fi
 fi
 
 CONFIG_PATH="config/config2.yaml"
