@@ -20,14 +20,13 @@ GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.75}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-1}"
 MAX_TOKENS="${MAX_TOKENS:-2048}"
 
-AFLOW_DATASET="${AFLOW_DATASET:-HumanEval}"
+AFLOW_DATASETS="${AFLOW_DATASETS:-${AFLOW_DATASET:-HumanEval,MATH}}"
 AFLOW_SAMPLE="${AFLOW_SAMPLE:-2}"
 AFLOW_INITIAL_ROUND="${AFLOW_INITIAL_ROUND:-1}"
 AFLOW_MAX_ROUNDS="${AFLOW_MAX_ROUNDS:-3}"
 AFLOW_VALIDATION_ROUNDS="${AFLOW_VALIDATION_ROUNDS:-1}"
 AFLOW_MAX_CONCURRENT_TASKS="${AFLOW_MAX_CONCURRENT_TASKS:-1}"
 AFLOW_OPTIMIZED_PATH="${AFLOW_OPTIMIZED_PATH:-workspace_vllm_qwen3_8b}"
-SOURCE_WORKFLOW_DIR="${SOURCE_WORKFLOW_DIR:-workspace/${AFLOW_DATASET}/workflows}"
 
 cd "${REPO_DIR}"
 source "${CONDA_HOME}/bin/activate" "${CONDA_ENV}"
@@ -43,7 +42,7 @@ echo "Running on node: $(hostname)"
 echo "Repo: ${REPO_DIR}"
 echo "Model path: ${MODEL_PATH}"
 echo "Served model name: ${SERVED_MODEL_NAME}"
-echo "AFlow dataset: ${AFLOW_DATASET}"
+echo "AFlow datasets: ${AFLOW_DATASETS}"
 
 if [[ ! -d "${MODEL_PATH}" ]]; then
     echo "Missing local model directory: ${MODEL_PATH}" >&2
@@ -55,24 +54,37 @@ if [[ ! -d "data/datasets" ]]; then
     exit 1
 fi
 
-TARGET_WORKFLOW_DIR="${AFLOW_OPTIMIZED_PATH}/${AFLOW_DATASET}/workflows"
-if [[ ! -f "${TARGET_WORKFLOW_DIR}/round_1/graph.py" ]]; then
-    echo "Seeding initial AFlow workflow from ${SOURCE_WORKFLOW_DIR}"
-    if [[ ! -f "${SOURCE_WORKFLOW_DIR}/round_1/graph.py" ]]; then
-        echo "Missing source workflow seed: ${SOURCE_WORKFLOW_DIR}/round_1/graph.py" >&2
+seed_aflow_workflow() {
+    local dataset="$1"
+    local source_workflow_dir="${SOURCE_WORKFLOW_DIR:-workspace/${dataset}/workflows}"
+    local target_workflow_dir="${AFLOW_OPTIMIZED_PATH}/${dataset}/workflows"
+
+    if [[ -f "${target_workflow_dir}/round_1/graph.py" && -f "${target_workflow_dir}/template/operator.json" ]]; then
+        return
+    fi
+
+    echo "Seeding initial AFlow workflow for ${dataset} from ${source_workflow_dir}"
+    if [[ ! -f "${source_workflow_dir}/round_1/graph.py" ]]; then
+        echo "Missing source workflow seed: ${source_workflow_dir}/round_1/graph.py" >&2
         exit 1
     fi
-    mkdir -p "${TARGET_WORKFLOW_DIR}"
-    cp -a "${SOURCE_WORKFLOW_DIR}/round_1" "${TARGET_WORKFLOW_DIR}/"
-    cp -a "${SOURCE_WORKFLOW_DIR}/template" "${TARGET_WORKFLOW_DIR}/"
-    touch "${AFLOW_OPTIMIZED_PATH}/__init__.py"
-    mkdir -p "${AFLOW_OPTIMIZED_PATH}/${AFLOW_DATASET}"
-    touch "${AFLOW_OPTIMIZED_PATH}/${AFLOW_DATASET}/__init__.py"
-    touch "${TARGET_WORKFLOW_DIR}/__init__.py"
-    if [[ -f "${TARGET_WORKFLOW_DIR}/results.json" ]]; then
-        mv "${TARGET_WORKFLOW_DIR}/results.json" "${TARGET_WORKFLOW_DIR}/results.json.bak.${SLURM_JOB_ID:-manual}"
+    if [[ ! -f "${source_workflow_dir}/template/operator.json" ]]; then
+        echo "Missing source workflow template: ${source_workflow_dir}/template/operator.json" >&2
+        exit 1
     fi
-fi
+
+    mkdir -p "${target_workflow_dir}/round_1" "${target_workflow_dir}/template"
+    cp -a "${source_workflow_dir}/round_1/." "${target_workflow_dir}/round_1/"
+    cp -a "${source_workflow_dir}/template/." "${target_workflow_dir}/template/"
+    touch "${AFLOW_OPTIMIZED_PATH}/__init__.py"
+    mkdir -p "${AFLOW_OPTIMIZED_PATH}/${dataset}"
+    touch "${AFLOW_OPTIMIZED_PATH}/${dataset}/__init__.py"
+    touch "${target_workflow_dir}/__init__.py"
+
+    if [[ -f "${target_workflow_dir}/results.json" ]]; then
+        mv "${target_workflow_dir}/results.json" "${target_workflow_dir}/results.json.bak.${SLURM_JOB_ID:-manual}"
+    fi
+}
 
 CONFIG_PATH="config/config2.yaml"
 CONFIG_BACKUP=""
@@ -143,16 +155,29 @@ done
 curl -fsS "http://127.0.0.1:${PORT}/v1/models"
 echo
 
-echo "Starting AFlow optimization and validation evaluation..."
-CUDA_VISIBLE_DEVICES="" \
-python -u run.py \
-    --dataset "${AFLOW_DATASET}" \
-    --sample "${AFLOW_SAMPLE}" \
-    --optimized_path "${AFLOW_OPTIMIZED_PATH}" \
-    --initial_round "${AFLOW_INITIAL_ROUND}" \
-    --max_rounds "${AFLOW_MAX_ROUNDS}" \
-    --validation_rounds "${AFLOW_VALIDATION_ROUNDS}" \
-    --max_concurrent_tasks "${AFLOW_MAX_CONCURRENT_TASKS}" \
-    --if_force_download false \
-    --opt_model_name "${SERVED_MODEL_NAME}" \
-    --exec_model_name "${SERVED_MODEL_NAME}"
+IFS=',' read -r -a AFLOW_DATASET_LIST <<< "${AFLOW_DATASETS}"
+
+for dataset in "${AFLOW_DATASET_LIST[@]}"; do
+    dataset="$(echo "${dataset}" | xargs)"
+    if [[ -z "${dataset}" ]]; then
+        continue
+    fi
+
+    seed_aflow_workflow "${dataset}"
+
+    echo "Starting AFlow optimization and validation evaluation for ${dataset}..."
+    CUDA_VISIBLE_DEVICES="" \
+    python -u run.py \
+        --dataset "${dataset}" \
+        --sample "${AFLOW_SAMPLE}" \
+        --optimized_path "${AFLOW_OPTIMIZED_PATH}" \
+        --initial_round "${AFLOW_INITIAL_ROUND}" \
+        --max_rounds "${AFLOW_MAX_ROUNDS}" \
+        --validation_rounds "${AFLOW_VALIDATION_ROUNDS}" \
+        --max_concurrent_tasks "${AFLOW_MAX_CONCURRENT_TASKS}" \
+        --if_force_download false \
+        --opt_model_name "${SERVED_MODEL_NAME}" \
+        --exec_model_name "${SERVED_MODEL_NAME}"
+done
+
+echo "AFlow optimization finished for: ${AFLOW_DATASETS}"
