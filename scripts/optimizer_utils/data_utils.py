@@ -16,6 +16,14 @@ class DataUtils:
     DEFAULT_ALPHA = 0.2
     DEFAULT_LAMBDA = 0.3
     DEFAULT_LOG_SAMPLES = 3
+    DEFAULT_LOG_TOTAL_CHARS = 6000
+    DEFAULT_LOG_FIELD_CHARS = {
+        "question": 700,
+        "right_answer": 900,
+        "model_output": 900,
+        "extracted_output": 400,
+        "extract_answer_code": 0,
+    }
     
     def __init__(self, root_path: str):
         self.root_path = Path(root_path)
@@ -137,12 +145,33 @@ class DataUtils:
         sample_size = min(self.DEFAULT_LOG_SAMPLES, len(data))
         random_samples = random.sample(data, sample_size)
 
-        log_entries = [
-            json.dumps(sample, indent=4, ensure_ascii=False) 
-            for sample in random_samples
-        ]
+        log_entries = [self._summarize_log_entry(sample) for sample in random_samples]
         
-        return "\n\n".join(log_entries)
+        logs = "\n\n".join(log_entries)
+        return self._truncate_text(logs, self.DEFAULT_LOG_TOTAL_CHARS)
+
+    def _summarize_log_entry(self, entry: Any) -> str:
+        if not isinstance(entry, dict):
+            return self._truncate_text(str(entry), self.DEFAULT_LOG_TOTAL_CHARS // self.DEFAULT_LOG_SAMPLES)
+
+        summary = {}
+        for key, value in entry.items():
+            limit = self.DEFAULT_LOG_FIELD_CHARS.get(key, 500)
+            if limit <= 0:
+                continue
+            summary[key] = self._truncate_text(str(value), limit)
+
+        return json.dumps(summary, indent=2, ensure_ascii=False)
+
+    @staticmethod
+    def _truncate_text(text: str, max_chars: int) -> str:
+        if max_chars <= 0 or len(text) <= max_chars:
+            return text
+        omitted = len(text) - max_chars
+        suffix = f"\n...[truncated {omitted} chars]"
+        if len(suffix) >= max_chars:
+            return text[:max_chars]
+        return f"{text[:max_chars - len(suffix)]}{suffix}"
 
     def get_results_file_path(self, graph_path: str) -> str:
         

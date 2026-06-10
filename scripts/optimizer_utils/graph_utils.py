@@ -3,6 +3,7 @@ import os
 import re
 import time
 import traceback
+from pathlib import Path
 from typing import List
 
 from scripts.prompts.optimize_prompt import (
@@ -24,8 +25,8 @@ class GraphUtils:
         return directory
 
     def load_graph(self, round_number: int, workflows_path: str):
-        workflows_path = workflows_path.replace("\\", ".").replace("/", ".")
-        graph_module_name = f"{workflows_path}.round_{round_number}.graph"
+        workflows_package = self._path_to_module(workflows_path)
+        graph_module_name = f"{workflows_package}.round_{round_number}.graph"
 
         try:
             graph_module = __import__(graph_module_name, fromlist=[""])
@@ -113,7 +114,12 @@ class GraphUtils:
         return None
 
     def write_graph_files(self, directory: str, response: dict, round_number: int, dataset: str):
-        graph = WORKFLOW_TEMPLATE.format(graph=response["graph"], round=round_number, dataset=dataset)
+        workflows_package = self._path_to_module(Path(directory).parent)
+        graph = WORKFLOW_TEMPLATE.format(
+            graph=response["graph"],
+            round=round_number,
+            workflow_package=workflows_package,
+        )
 
         with open(os.path.join(directory, "graph.py"), "w", encoding="utf-8") as file:
             file.write(graph)
@@ -123,3 +129,12 @@ class GraphUtils:
 
         with open(os.path.join(directory, "__init__.py"), "w", encoding="utf-8") as file:
             file.write("")
+
+    @staticmethod
+    def _path_to_module(path: str) -> str:
+        path = Path(path)
+        try:
+            path = path.resolve().relative_to(Path.cwd().resolve())
+        except ValueError:
+            pass
+        return str(path).replace("\\", ".").replace("/", ".")

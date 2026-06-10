@@ -49,8 +49,8 @@ Note: In custom, the input and instruction are directly concatenated(instruction
 """
 
 WORKFLOW_TEMPLATE = """from typing import Literal
-import workspace.{dataset}.workflows.template.operator as operator
-import workspace.{dataset}.workflows.round_{round}.prompt as prompt_custom
+import {workflow_package}.template.operator as operator
+import {workflow_package}.round_{round}.prompt as prompt_custom
 from scripts.async_llm import create_llm_instance
 
 
