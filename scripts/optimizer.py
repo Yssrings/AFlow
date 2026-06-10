@@ -4,6 +4,7 @@
 # @Desc    : optimizer for graph (updated with AsyncLLM integration)
 
 import asyncio
+import ast
 import time
 from typing import List, Literal, Dict
 
@@ -63,6 +64,7 @@ class Optimizer:
         self.max_rounds = max_rounds
         self.validation_rounds = validation_rounds
         self.max_concurrent_tasks = max_concurrent_tasks
+        self._initial_evaluated = False
 
         self.graph_utils = GraphUtils(self.root_path)
         self.data_utils = DataUtils(self.root_path)
@@ -104,7 +106,11 @@ class Optimizer:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
 
-            self.round += 1
+            if score is None:
+                logger.info(f"Optimization for candidate round {self.round + 1} failed; keeping current round at {self.round}.")
+            else:
+                self.round += 1
+
             logger.info(f"Score for round {self.round}: {score}")
 
             converged, convergence_round, final_round = self.convergence_utils.check_convergence(top_k=3)
@@ -124,15 +130,21 @@ class Optimizer:
         graph_path = f"{self.root_path}/workflows"
         data = self.data_utils.load_results(graph_path)
 
-        if self.round == 1:
+        if self.round == 1 and not self._initial_evaluated:
             directory = self.graph_utils.create_round_directory(graph_path, self.round)
             # Load graph using graph_utils
             self.graph = self.graph_utils.load_graph(self.round, graph_path)
             avg_score = await self.evaluation_utils.evaluate_graph(self, directory, validation_n, data, initial=True)
+            self._initial_evaluated = True
 
         # Create a loop until the generated graph meets the check conditions
-        while True:
-            directory = self.graph_utils.create_round_directory(graph_path, self.round + 1)
+        generation_attempts = 0
+        max_generation_attempts = 3
+        response = None
+        sample = None
+        processed_experience = None
+        while generation_attempts < max_generation_attempts:
+            generation_attempts += 1
 
             top_rounds = self.data_utils.get_top_rounds(self.sample)
             sample = self.data_utils.select_round(top_rounds)
@@ -175,6 +187,15 @@ class Optimizer:
                     logger.error("Failed to extract fields from raw response, retrying...")
                     continue
 
+            response = self._validate_graph_optimize_response(response)
+            if response is None:
+                logger.error("Graph optimization response is incomplete, retrying...")
+                continue
+
+            if not self._is_generated_graph_safe(response["graph"]):
+                logger.error("Generated graph failed safety checks, retrying...")
+                continue
+
             # Check if the modification meets the conditions
             check = self.experience_utils.check_modification(
                 processed_experience, response["modification"], sample["round"]
@@ -183,8 +204,11 @@ class Optimizer:
             # If `check` is True, break the loop; otherwise, regenerate the graph
             if check:
                 break
+        else:
+            raise RuntimeError("Failed to generate a valid graph after retries.")
 
         # Save the graph and evaluate
+        directory = self.graph_utils.create_round_directory(graph_path, self.round + 1)
         self.graph_utils.write_graph_files(directory, response, self.round + 1, self.dataset)
 
         experience = self.experience_utils.create_experience_data(sample, response["modification"])
@@ -236,6 +260,71 @@ class Optimizer:
         except Exception as e:
             logger.error(f"Error extracting fields from response: {str(e)}")
             return None
+
+    def _validate_graph_optimize_response(self, response: Dict[str, str]) -> Dict[str, str]:
+        required_fields = ("modification", "graph", "prompt")
+        if not isinstance(response, dict):
+            return None
+
+        normalized = {}
+        for field in required_fields:
+            value = str(response.get(field, "")).strip()
+            if not value:
+                logger.error(f"Missing required graph optimization field: {field}")
+                return None
+            normalized[field] = value
+        return normalized
+
+    def _is_generated_graph_safe(self, graph: str) -> bool:
+        try:
+            tree = ast.parse(graph)
+        except SyntaxError as e:
+            logger.error(f"Generated graph has syntax error: {e}")
+            return False
+
+        assigned_ops = set()
+        called_ops = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if (
+                        isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"
+                    ):
+                        assigned_ops.add(target.attr)
+            elif isinstance(node, ast.Call):
+                func = node.func
+                if (
+                    isinstance(func, ast.Attribute)
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id == "self"
+                ):
+                    called_ops.add(func.attr)
+
+        missing_ops = called_ops - assigned_ops
+        if missing_ops:
+            logger.error(f"Generated graph calls uninitialized operators: {sorted(missing_ops)}")
+            return False
+
+        if self.type == "code" and self._has_looped_code_generation(tree):
+            logger.error("Generated code graph loops over CustomCodeGenerate calls, which is likely to timeout.")
+            return False
+
+        return True
+
+    @staticmethod
+    def _has_looped_code_generation(tree: ast.AST) -> bool:
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.For, ast.While, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                for child in ast.walk(node):
+                    if (
+                        isinstance(child, ast.Call)
+                        and isinstance(child.func, ast.Attribute)
+                        and child.func.attr == "custom_code_generate"
+                    ):
+                        return True
+        return False
 
     async def test(self):
         rounds = [1]  # You can choose the rounds you want to test here.
