@@ -3,6 +3,10 @@
         "description": "Generates anything based on customized input and instruction.",
         "interface": "custom(input: str, instruction: str) -> dict with key 'response' of type str"
     },
+    "AnswerGenerate": {
+        "description": "Generates a step-by-step thought and a concise final answer for math or QA tasks.",
+        "interface": "answer_generate(input: str) -> dict with keys 'thought' and 'answer' of type str"
+    },
     "ScEnsemble": {
         "description": "Uses self-consistency to select the solution that appears most frequently in the solution list, improve the selection to enhance the choice of the best solution.",
         "interface": "sc_ensemble(solutions: List[str], problem: str) -> dict with key 'response' of type str"

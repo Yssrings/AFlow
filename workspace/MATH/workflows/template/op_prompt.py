@@ -1,3 +1,10 @@
+ANSWER_GENERATION_PROMPT = """
+Think step by step and solve the problem.
+1. In the "thought" field, explain your thinking process in detail.
+2. In the "answer" field, provide the final answer concisely and clearly. The answer should be a direct response to the question, without including explanations or reasoning.
+Your task: {input}
+"""
+
 SC_ENSEMBLE_PROMPT = """
 Given the question described as follows: {problem}
 Several solutions have been generated to address the given question. They are as follows:

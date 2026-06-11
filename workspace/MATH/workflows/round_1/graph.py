@@ -15,11 +15,15 @@ class Workflow:
         self.name = name
         self.dataset = dataset
         self.llm = create_llm_instance(llm_config)
-        self.custom = operator.Custom(self.llm)
+        self.response = operator.AnswerGenerate(self.llm)
 
     async def __call__(self, problem: str):
         """
         Implementation of the workflow
         """
-        solution = await self.custom(input=problem, instruction="")
-        return solution['response'], self.llm.get_usage_summary()["total_cost"]
+        solution = await self.response(input=problem)
+        answer = solution.get("answer", "")
+        thought = solution.get("thought", "")
+        final_answer = answer if "\\boxed" in answer else f"\\boxed{{{answer}}}"
+        prediction = f"{thought}\n\nFinal answer: {final_answer}" if thought else final_answer
+        return prediction, self.llm.get_usage_summary()["total_cost"]

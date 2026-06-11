@@ -31,7 +31,7 @@ EXPERIMENT_CONFIGS: Dict[str, ExperimentConfig] = {
     "MATH": ExperimentConfig(
         dataset="MATH",
         question_type="math",
-        operators=["Custom", "ScEnsemble", "Programmer"],
+        operators=["Custom", "AnswerGenerate", "ScEnsemble", "Programmer"],
     ),
     "GSM8K": ExperimentConfig(
         dataset="GSM8K",
