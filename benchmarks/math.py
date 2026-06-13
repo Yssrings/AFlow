@@ -131,6 +131,14 @@ class MATHBenchmark(BaseBenchmark):
 
         except Exception as e:
             logger.info(f"Maximum retries reached. Skipping this sample. Error: {e}")
+            self.log_failure(
+                problem=input_text,
+                expected_output=expected_output,
+                prediction=str(e),
+                failure_type="graph_exception",
+                error_message=str(e),
+                extract_answer_code=self.get_function_code(self.extract_model_answer),
+            )
             return input_text, str(e), expected_output, 0.0, 0.0
 
     def get_result_columns(self) -> List[str]:

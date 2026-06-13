@@ -262,6 +262,14 @@ class LiveCodeBench(BaseBenchmark):
 
         except asyncio.TimeoutError:
             logger.error(f"Code generation timeout: {question_id}")
+            self.log_failure(
+                problem=question,
+                expected_output="",
+                prediction="Timeout",
+                failure_type="graph_timeout",
+                error_message="Graph call exceeded the per-attempt timeout after retries.",
+                details={"timeout_seconds": 120, "retry_attempts": 3, "question_id": question_id},
+            )
             evaluation_details = {"question_id": question_id, "error": "Timeout"}
             return (question, "Timeout", "", 0.0, evaluation_details, 0.0)
         
@@ -269,6 +277,14 @@ class LiveCodeBench(BaseBenchmark):
             import traceback
             traceback.print_exc()
             logger.error(f"Evaluation error: {question_id}, error: {e}")
+            self.log_failure(
+                problem=question,
+                expected_output="",
+                prediction=f"Evaluation error: {str(e)}",
+                failure_type="graph_exception",
+                error_message=str(e),
+                details={"question_id": question_id},
+            )
             evaluation_details = {"question_id": question_id, "error": str(e)}
             return (
                 question,

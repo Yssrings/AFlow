@@ -1,6 +1,7 @@
 import datetime
 import json
 import random
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -18,11 +19,15 @@ class DataUtils:
     DEFAULT_LOG_SAMPLES = 3
     DEFAULT_LOG_TOTAL_CHARS = 6000
     DEFAULT_LOG_FIELD_CHARS = {
+        "failure_type": 120,
         "question": 700,
         "right_answer": 900,
         "model_output": 900,
         "extracted_output": 400,
         "extract_answer_code": 0,
+        "error_message": 900,
+        "details": 700,
+        "logged_at": 80,
     }
     
     def __init__(self, root_path: str):
@@ -146,9 +151,30 @@ class DataUtils:
         random_samples = random.sample(data, sample_size)
 
         log_entries = [self._summarize_log_entry(sample) for sample in random_samples]
-        
+        failure_summary = self._summarize_failure_counts(data)
+        if failure_summary:
+            log_entries.insert(0, failure_summary)
+
         logs = "\n\n".join(log_entries)
         return self._truncate_text(logs, self.DEFAULT_LOG_TOTAL_CHARS)
+
+    def _summarize_failure_counts(self, entries: List[Any]) -> str:
+        failure_counts = Counter()
+        for entry in entries:
+            if isinstance(entry, dict):
+                failure_counts[str(entry.get("failure_type", "unspecified"))] += 1
+
+        if not failure_counts:
+            return ""
+
+        return json.dumps(
+            {
+                "total_log_entries": len(entries),
+                "failure_type_counts": dict(failure_counts),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
 
     def _summarize_log_entry(self, entry: Any) -> str:
         if not isinstance(entry, dict):

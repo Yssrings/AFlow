@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import threading
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,7 @@ class BaseBenchmark(ABC):
         self.name = name
         self.file_path = file_path
         self.log_path = log_path
+        self._log_lock = threading.Lock()
 
     PASS = "PASS"
     FAIL = "FAIL"
@@ -52,25 +54,62 @@ class BaseBenchmark(ABC):
         prediction: str,
         extracted_output: Any,
         extract_answer_code: str = "None",
+        failure_type: str = "wrong_answer",
+        error_message: str = "",
     ):
         log_data = {
+            "failure_type": failure_type,
             "question": problem,
             "right_answer": expected_output,
             "model_output": prediction,
             "extracted_output": extracted_output,
             "extract_answer_code": extract_answer_code,
+            "error_message": error_message,
         }
+        self._append_log_entry(log_data)
+
+    def log_failure(
+        self,
+        problem: str,
+        expected_output: Any,
+        prediction: str,
+        failure_type: str,
+        error_message: str,
+        extracted_output: Any = "",
+        details: Any = None,
+        extract_answer_code: str = "None",
+    ):
+        log_data = {
+            "failure_type": failure_type,
+            "question": problem,
+            "right_answer": expected_output,
+            "model_output": prediction,
+            "extracted_output": extracted_output,
+            "extract_answer_code": extract_answer_code,
+            "error_message": error_message,
+        }
+        if details is not None:
+            log_data["details"] = details
+        self._append_log_entry(log_data)
+
+    def _append_log_entry(self, log_data: dict):
+        log_data["logged_at"] = datetime.now().isoformat(timespec="seconds")
         log_file = Path(self.log_path) / "log.json"
-        if log_file.exists():
-            with log_file.open("r", encoding="utf-8") as f:
-                try:
-                    data = json.load(f)
-                except json.JSONDecodeError:
+        with self._log_lock:
+            if log_file.exists():
+                with log_file.open("r", encoding="utf-8") as f:
+                    try:
+                        data = json.load(f)
+                    except json.JSONDecodeError:
+                        data = []
+                if isinstance(data, dict):
+                    data = [data]
+                elif not isinstance(data, list):
                     data = []
-        else:
-            data = []
-        data.append(log_data)
-        write_json_file(log_file, data, encoding="utf-8", indent=4)
+            else:
+                data = []
+            data.append(log_data)
+            write_json_file(log_file, data, encoding="utf-8", indent=4)
 
     @abstractmethod
     async def evaluate_problem(self, problem: dict, agent: Callable) -> Tuple[Any, ...]:
@@ -113,4 +152,3 @@ class BaseBenchmark(ABC):
         logger.info(f"Total Cost: {total_cost:.5f}")
         logger.info(f"Avg Cost:{average_cost:.5f}")
         return average_score, average_cost, total_cost
-

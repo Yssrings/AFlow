@@ -20,9 +20,9 @@ class Custom(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "Custom"):
         super().__init__(llm, name)
 
-    async def __call__(self, input, instruction):
+    async def __call__(self, input, instruction, enable_thinking: Optional[bool] = None):
         prompt = instruction + input
-        response = await self._fill_node(GenerateOp, prompt, mode="single_fill")
+        response = await self._fill_node(GenerateOp, prompt, mode="single_fill", enable_thinking=enable_thinking)
         return response
 
 
@@ -30,9 +30,9 @@ class AnswerGenerate(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "AnswerGenerate"):
         super().__init__(llm, name)
 
-    async def __call__(self, input: str):
+    async def __call__(self, input: str, enable_thinking: Optional[bool] = None):
         prompt = ANSWER_GENERATION_PROMPT.format(input=input)
-        response = await self._fill_node(AnswerGenerateOp, prompt, mode="xml_fill")
+        response = await self._fill_node(AnswerGenerateOp, prompt, mode="xml_fill", enable_thinking=enable_thinking)
         return response
 
 
@@ -90,7 +90,7 @@ class Programmer(Operator):
             except Exception as e:
                 return "Error", f"Unknown error: {str(e)}"
 
-    async def code_generate(self, problem, analysis, feedback, mode):
+    async def code_generate(self, problem, analysis, feedback, mode, enable_thinking: Optional[bool] = None):
         """
         Asynchronous method to generate code.
         """
@@ -99,11 +99,11 @@ class Programmer(Operator):
             analysis=analysis,
             feedback=feedback
         )
-        response = await self._fill_node(CodeGenerateOp, prompt, mode, function_name="solve")
+        response = await self._fill_node(CodeGenerateOp, prompt, mode, function_name="solve", enable_thinking=enable_thinking)
         return response
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    async def __call__(self, problem: str, analysis: str = "None"):
+    async def __call__(self, problem: str, analysis: str = "None", enable_thinking: Optional[bool] = None):
         """
         Call method, generate code and execute, retry up to 3 times.
         """
@@ -111,7 +111,7 @@ class Programmer(Operator):
         output = None
         feedback = ""
         for i in range(3):
-            code_response = await self.code_generate(problem, analysis, feedback, mode="code_fill")
+            code_response = await self.code_generate(problem, analysis, feedback, mode="code_fill", enable_thinking=enable_thinking)
             code = code_response.get("code")
             if not code:
                 return {"code": code, "output": "No code generated"}
@@ -138,7 +138,7 @@ class ScEnsemble(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "ScEnsemble"):
         super().__init__(llm, name)
 
-    async def __call__(self, solutions: List[str], problem: str):
+    async def __call__(self, solutions: List[str], problem: str, enable_thinking: Optional[bool] = None):
         answer_mapping = {}
         solution_text = ""
         for index, solution in enumerate(solutions):
@@ -146,7 +146,7 @@ class ScEnsemble(Operator):
             solution_text += f"{chr(65 + index)}: \n{str(solution)}\n\n\n"
 
         prompt = SC_ENSEMBLE_PROMPT.format(problem=problem, solutions=solution_text)
-        response = await self._fill_node(ScEnsembleOp, prompt, mode="xml_fill")
+        response = await self._fill_node(ScEnsembleOp, prompt, mode="xml_fill", enable_thinking=enable_thinking)
 
         answer = response.get("solution_letter", "")
         answer = answer.strip().upper()

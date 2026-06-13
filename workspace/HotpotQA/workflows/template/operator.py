@@ -22,18 +22,18 @@ class Custom(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "Custom"):
         super().__init__(llm, name)
 
-    async def __call__(self, input, instruction):
+    async def __call__(self, input, instruction, enable_thinking: Optional[bool] = None):
         prompt = instruction + input
-        response = await self._fill_node(GenerateOp, prompt, mode="single_fill")
+        response = await self._fill_node(GenerateOp, prompt, mode="single_fill", enable_thinking=enable_thinking)
         return response
     
 class AnswerGenerate(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "AnswerGenerate"):
         super().__init__(llm, name)
 
-    async def __call__(self, input: str, mode: str = None) -> Tuple[str, str]:
+    async def __call__(self, input: str, mode: str = None, enable_thinking: Optional[bool] = None) -> Tuple[str, str]:
         prompt = ANSWER_GENERATION_PROMPT.format(input=input)
-        response = await self._fill_node(AnswerGenerateOp, prompt, mode="xml_fill")
+        response = await self._fill_node(AnswerGenerateOp, prompt, mode="xml_fill", enable_thinking=enable_thinking)
         return response
 
 class ScEnsemble(Operator):
@@ -47,7 +47,7 @@ class ScEnsemble(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "ScEnsemble"):
         super().__init__(llm, name)
 
-    async def __call__(self, solutions: List[str]):
+    async def __call__(self, solutions: List[str], enable_thinking: Optional[bool] = None):
         answer_mapping = {}
         solution_text = ""
         for index, solution in enumerate(solutions):
@@ -55,7 +55,7 @@ class ScEnsemble(Operator):
             solution_text += f"{chr(65 + index)}: \n{str(solution)}\n\n\n"
 
         prompt = SC_ENSEMBLE_PROMPT.format(solutions=solution_text)
-        response = await self._fill_node(ScEnsembleOp, prompt, mode="xml_fill")
+        response = await self._fill_node(ScEnsembleOp, prompt, mode="xml_fill", enable_thinking=enable_thinking)
 
         answer = response.get("solution_letter", "")
         answer = answer.strip().upper()

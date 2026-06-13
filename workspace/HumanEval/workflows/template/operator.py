@@ -27,18 +27,18 @@ class Custom(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "Custom"):
         super().__init__(llm, name)
 
-    async def __call__(self, input, instruction):
+    async def __call__(self, input, instruction, enable_thinking: Optional[bool] = None):
         prompt = instruction + input
-        response = await self._fill_node(GenerateOp, prompt, mode="single_fill")
+        response = await self._fill_node(GenerateOp, prompt, mode="single_fill", enable_thinking=enable_thinking)
         return response
     
 class CustomCodeGenerate(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "CustomCodeGenerate"):
         super().__init__(llm, name)
 
-    async def __call__(self, problem, entry_point, instruction):
+    async def __call__(self, problem, entry_point, instruction, enable_thinking: Optional[bool] = None):
         prompt = instruction + problem
-        response = await self._fill_node(GenerateOp, prompt, mode="code_fill", function_name=entry_point)
+        response = await self._fill_node(GenerateOp, prompt, mode="code_fill", function_name=entry_point, enable_thinking=enable_thinking)
         return response
 
 
@@ -53,7 +53,7 @@ class ScEnsemble(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "ScEnsemble"):
         super().__init__(llm, name)
 
-    async def __call__(self, solutions: List[str], problem: str):
+    async def __call__(self, solutions: List[str], problem: str, enable_thinking: Optional[bool] = None):
         answer_mapping = {}
         solution_text = ""
         for index, solution in enumerate(solutions):
@@ -61,7 +61,7 @@ class ScEnsemble(Operator):
             solution_text += f"{chr(65 + index)}: \n{str(solution)}\n\n\n"
 
         prompt = SC_ENSEMBLE_PROMPT.format(problem=problem, solutions=solution_text)
-        response = await self._fill_node(ScEnsembleOp, prompt, mode="xml_fill")
+        response = await self._fill_node(ScEnsembleOp, prompt, mode="xml_fill", enable_thinking=enable_thinking)
 
         answer = response.get("solution_letter", "")
         answer = answer.strip().upper()
@@ -105,7 +105,7 @@ class Test(Operator):
             return "no error"
 
     async def __call__(
-        self, problem, solution, entry_point, test_loop: int = 3
+        self, problem, solution, entry_point, test_loop: int = 3, enable_thinking: Optional[bool] = None
     ):
         """
         "Test": {
@@ -125,7 +125,7 @@ class Test(Operator):
                     exec_pass=f"executed unsuccessfully, error: \n {result}",
                     test_fail="executed unsucessfully",
                 )
-                response = await self._fill_node(ReflectionTestOp, prompt, mode="code_fill")
+                response = await self._fill_node(ReflectionTestOp, prompt, mode="code_fill", enable_thinking=enable_thinking)
                 solution = response["response"]
             else:
                 prompt = REFLECTION_ON_PUBLIC_TEST_PROMPT.format(
@@ -134,7 +134,7 @@ class Test(Operator):
                     exec_pass="executed successfully",
                     test_fail=result,
                 )
-                response = await self._fill_node(ReflectionTestOp, prompt, mode="code_fill")
+                response = await self._fill_node(ReflectionTestOp, prompt, mode="code_fill", enable_thinking=enable_thinking)
                 solution = response["response"]
         
         result = self.exec_code(solution, entry_point)

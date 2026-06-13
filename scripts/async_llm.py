@@ -6,6 +6,7 @@
 from openai import AsyncOpenAI
 from scripts.formatter import BaseFormatter, FormatError
 
+import copy
 import yaml
 from pathlib import Path
 from typing import Dict, Optional, Any
@@ -185,7 +186,7 @@ class AsyncLLM:
         self.sys_msg = system_msg
         self.usage_tracker = TokenUsageTracker()
         
-    async def __call__(self, prompt):
+    async def __call__(self, prompt, enable_thinking: Optional[bool] = None, extra_body: Optional[Dict[str, Any]] = None):
         message = []
         if self.sys_msg is not None:
             message.append({
@@ -203,8 +204,9 @@ class AsyncLLM:
         }
         if self.config.max_tokens is not None:
             request_kwargs["max_tokens"] = self.config.max_tokens
-        if self.config.extra_body:
-            request_kwargs["extra_body"] = self.config.extra_body
+        request_extra_body = self._build_extra_body(extra_body=extra_body, enable_thinking=enable_thinking)
+        if request_extra_body:
+            request_kwargs["extra_body"] = request_extra_body
 
         response = await self.aclient.chat.completions.create(**request_kwargs)
 
@@ -227,8 +229,38 @@ class AsyncLLM:
         print(f"Cost: ${usage_record['total_cost']:.6f} (${usage_record['input_cost']:.6f} for input, ${usage_record['output_cost']:.6f} for output)")
         
         return ret
+
+    def _build_extra_body(
+        self,
+        extra_body: Optional[Dict[str, Any]] = None,
+        enable_thinking: Optional[bool] = None,
+    ) -> Optional[Dict[str, Any]]:
+        if self.config.extra_body and not isinstance(self.config.extra_body, dict):
+            raise TypeError("LLM extra_body must be a dict when per-call overrides are used")
+        base_extra_body = copy.deepcopy(self.config.extra_body) if self.config.extra_body else {}
+        if extra_body:
+            self._deep_update(base_extra_body, extra_body)
+        if enable_thinking is not None:
+            chat_template_kwargs = base_extra_body.setdefault("chat_template_kwargs", {})
+            chat_template_kwargs["enable_thinking"] = enable_thinking
+        return base_extra_body or None
+
+    @staticmethod
+    def _deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+        for key, value in updates.items():
+            if isinstance(value, dict) and isinstance(base.get(key), dict):
+                AsyncLLM._deep_update(base[key], value)
+            else:
+                base[key] = copy.deepcopy(value)
+        return base
     
-    async def call_with_format(self, prompt: str, formatter: BaseFormatter):
+    async def call_with_format(
+        self,
+        prompt: str,
+        formatter: BaseFormatter,
+        enable_thinking: Optional[bool] = None,
+        extra_body: Optional[Dict[str, Any]] = None,
+    ):
         """
         Call the LLM with a prompt and format the response using the provided formatter
         
@@ -245,7 +277,11 @@ class AsyncLLM:
         # Prepare the prompt with formatting instructions
         formatted_prompt = formatter.prepare_prompt(prompt)
         # Call the LLM
-        response = await self.__call__(formatted_prompt)
+        response = await self.__call__(
+            formatted_prompt,
+            enable_thinking=enable_thinking,
+            extra_body=extra_body,
+        )
         
         # Validate and parse the response
         is_valid, parsed_data = formatter.validate_response(response)

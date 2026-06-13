@@ -35,6 +35,8 @@ You do not need to manually import prompt_custom or operator to use them; they a
 Every self.xxx operator called in __call__ must be initialized as self.xxx in __init__.
 Initialize operators with the existing LLM instance, following the pattern `self.xxx = operator.OperatorName(self.llm)`.
 Every `prompt_custom.NAME` referenced by the graph must be defined as an active top-level string assignment in prompt_custom, not commented out.
+Each LLM-backed operator call may include `enable_thinking=True` or `enable_thinking=False`. If omitted, the global model configuration is used. You may mix this per node: keep thinking enabled for hard reasoning or code synthesis when useful, but disable it for formatting, selection, repair checks, or nodes that repeatedly timeout or consume too many tokens.
+When logs contain `failure_type` values such as `graph_timeout`, `solution_timeout`, or `graph_exception`, treat them as direct optimization signals. Prefer reducing unnecessary LLM calls, shortening prompts, avoiding repeated candidate generation, or disabling thinking only on non-essential/timeout-prone nodes instead of blindly increasing graph complexity.
 For code problems, avoid loops or multiple candidates around CustomCodeGenerate; local execution models are slow and such graphs frequently timeout. Prefer one code generation plus a lightweight Test repair step if needed.
 """
 
@@ -42,6 +44,8 @@ WORKFLOW_CUSTOM_USE = """\nHere's an example of using the `custom` method in gra
 ```
 # You can write your own prompt in <prompt>prompt_custom</prompt> and then use it in the Custom method in the graph
 response = await self.custom(input=problem, instruction=prompt_custom.XXX_PROMPT)
+# Optional per-node thinking override, when supported by the serving model:
+# response = await self.custom(input=problem, instruction=prompt_custom.XXX_PROMPT, enable_thinking=False)
 # You can also concatenate previously generated string results in the input to provide more comprehensive contextual information.
 # response = await self.custom(input=problem+f"xxx:{xxx}, xxx:{xxx}", instruction=prompt_custom.XXX_PROMPT)
 # The output from the Custom method can be placed anywhere you need it, as shown in the example below

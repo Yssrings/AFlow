@@ -51,17 +51,21 @@ class Operator:
     def __call__(self, *args, **kwargs):
         raise NotImplementedError
 
-    async def _fill_node(self, op_class, prompt, mode=None, **extra_kwargs):
+    async def _fill_node(self, op_class, prompt, mode=None, enable_thinking: Optional[bool] = None, **extra_kwargs):
         # Create appropriate formatter based on mode
         formatter = self._create_formatter(op_class, mode, **extra_kwargs)
         
         try:
             # Use the formatter with AsyncLLM
             if formatter:
-                response = await self.llm.call_with_format(prompt, formatter)
+                response = await self.llm.call_with_format(
+                    prompt,
+                    formatter,
+                    enable_thinking=enable_thinking,
+                )
             else:
                 # Fallback to direct call if no formatter is needed
-                response = await self.llm(prompt)
+                response = await self.llm(prompt, enable_thinking=enable_thinking)
                 
             # Convert to expected format based on the original implementation
             if isinstance(response, dict):
@@ -90,9 +94,9 @@ class Custom(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "Custom"):
         super().__init__(llm, name)
 
-    async def __call__(self, input, instruction):
+    async def __call__(self, input, instruction, enable_thinking: Optional[bool] = None):
         prompt = instruction + input
-        response = await self._fill_node(GenerateOp, prompt, mode="single_fill")
+        response = await self._fill_node(GenerateOp, prompt, mode="single_fill", enable_thinking=enable_thinking)
         return response
 
 
@@ -100,9 +104,9 @@ class AnswerGenerate(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "AnswerGenerate"):
         super().__init__(llm, name)
 
-    async def __call__(self, input: str) -> Tuple[str, str]:
+    async def __call__(self, input: str, enable_thinking: Optional[bool] = None) -> Tuple[str, str]:
         prompt = ANSWER_GENERATION_PROMPT.format(input=input)
-        response = await self._fill_node(AnswerGenerateOp, prompt, mode="xml_fill")
+        response = await self._fill_node(AnswerGenerateOp, prompt, mode="xml_fill", enable_thinking=enable_thinking)
         return response
 
 
@@ -110,9 +114,15 @@ class CustomCodeGenerate(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "CustomCodeGenerate"):
         super().__init__(llm, name)
 
-    async def __call__(self, problem, entry_point, instruction):
+    async def __call__(self, problem, entry_point, instruction, enable_thinking: Optional[bool] = None):
         prompt = instruction + problem
-        response = await self._fill_node(GenerateOp, prompt, mode="code_fill", function_name=entry_point)
+        response = await self._fill_node(
+            GenerateOp,
+            prompt,
+            mode="code_fill",
+            function_name=entry_point,
+            enable_thinking=enable_thinking,
+        )
         return response
 
 
@@ -127,7 +137,7 @@ class ScEnsemble(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "ScEnsemble"):
         super().__init__(llm, name)
 
-    async def __call__(self, solutions: List[str], problem: str):
+    async def __call__(self, solutions: List[str], problem: str, enable_thinking: Optional[bool] = None):
         answer_mapping = {}
         solution_text = ""
         for index, solution in enumerate(solutions):
@@ -135,7 +145,7 @@ class ScEnsemble(Operator):
             solution_text += f"{chr(65 + index)}: \n{str(solution)}\n\n\n"
 
         prompt = SC_ENSEMBLE_PROMPT.format(question=problem, solutions=solution_text)
-        response = await self._fill_node(ScEnsembleOp, prompt, mode="xml_fill")
+        response = await self._fill_node(ScEnsembleOp, prompt, mode="xml_fill", enable_thinking=enable_thinking)
 
         answer = response.get("solution_letter", "")
         answer = answer.strip().upper()
@@ -223,7 +233,7 @@ class Programmer(Operator):
         except Exception as e:
             return "Error", f"Unknown error: {str(e)}"
 
-    async def code_generate(self, problem, analysis, feedback, mode):
+    async def code_generate(self, problem, analysis, feedback, mode, enable_thinking: Optional[bool] = None):
         """
         Asynchronous method to generate code.
         """
@@ -232,11 +242,17 @@ class Programmer(Operator):
             analysis=analysis,
             feedback=feedback
         )
-        response = await self._fill_node(CodeGenerateOp, prompt, mode, function_name="solve")
+        response = await self._fill_node(
+            CodeGenerateOp,
+            prompt,
+            mode,
+            function_name="solve",
+            enable_thinking=enable_thinking,
+        )
         return response
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    async def __call__(self, problem: str, analysis: str = "None"):
+    async def __call__(self, problem: str, analysis: str = "None", enable_thinking: Optional[bool] = None):
         """
         Call method, generate code and execute, retry up to 3 times.
         """
@@ -244,7 +260,13 @@ class Programmer(Operator):
         output = None
         feedback = ""
         for i in range(3):
-            code_response = await self.code_generate(problem, analysis, feedback, mode="code_fill")
+            code_response = await self.code_generate(
+                problem,
+                analysis,
+                feedback,
+                mode="code_fill",
+                enable_thinking=enable_thinking,
+            )
             code = code_response.get("code")
             if not code:
                 return {"code": code, "output": "No code generated"}
@@ -299,7 +321,14 @@ class Test(Operator):
         else:
             return "no error"
 
-    async def __call__(self, problem, solution, entry_point, test_loop: int = 3):
+    async def __call__(
+        self,
+        problem,
+        solution,
+        entry_point,
+        test_loop: int = 3,
+        enable_thinking: Optional[bool] = None,
+    ):
         """
         "Test": {
         "description": "Test the solution with test cases, if the solution is correct, return 'no error'; if incorrect, reflect on the solution and the error information",
@@ -318,7 +347,12 @@ class Test(Operator):
                     exec_pass=f"executed unsuccessfully, error: \n {result}",
                     test_fail="executed unsucessfully",
                 )
-                response = await self._fill_node(ReflectionTestOp, prompt, mode="code_fill")
+                response = await self._fill_node(
+                    ReflectionTestOp,
+                    prompt,
+                    mode="code_fill",
+                    enable_thinking=enable_thinking,
+                )
                 solution = response["response"]
             else:
                 prompt = REFLECTION_ON_PUBLIC_TEST_PROMPT.format(
@@ -327,7 +361,12 @@ class Test(Operator):
                     exec_pass="executed successfully",
                     test_fail=result,
                 )
-                response = await self._fill_node(ReflectionTestOp, prompt, mode="code_fill")
+                response = await self._fill_node(
+                    ReflectionTestOp,
+                    prompt,
+                    mode="code_fill",
+                    enable_thinking=enable_thinking,
+                )
                 solution = response["response"]
 
         result = self.exec_code(solution, entry_point)
@@ -341,9 +380,9 @@ class Format(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "Format"):
         super().__init__(llm, name)
 
-    async def __call__(self, problem, solution, mode: str = None):
+    async def __call__(self, problem, solution, mode: str = None, enable_thinking: Optional[bool] = None):
         prompt = FORMAT_PROMPT.format(problem_description=problem, solution=solution)
-        response = await self._fill_node(FormatOp, prompt, mode)
+        response = await self._fill_node(FormatOp, prompt, mode, enable_thinking=enable_thinking)
         return response
 
 
@@ -351,9 +390,9 @@ class Review(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "Review"):
         super().__init__(llm, name)
 
-    async def __call__(self, problem, solution, mode: str = None):
+    async def __call__(self, problem, solution, mode: str = None, enable_thinking: Optional[bool] = None):
         prompt = REVIEW_PROMPT.format(problem=problem, solution=solution)
-        response = await self._fill_node(ReviewOp, prompt, mode="xml_fill")
+        response = await self._fill_node(ReviewOp, prompt, mode="xml_fill", enable_thinking=enable_thinking)
         return response
 
 
@@ -361,9 +400,16 @@ class Revise(Operator):
     def __init__(self, llm: AsyncLLM, name: str = "Revise"):
         super().__init__(llm, name)
 
-    async def __call__(self, problem, solution, feedback, mode: str = None):
+    async def __call__(
+        self,
+        problem,
+        solution,
+        feedback,
+        mode: str = None,
+        enable_thinking: Optional[bool] = None,
+    ):
         prompt = REVISE_PROMPT.format(problem=problem, solution=solution, feedback=feedback)
-        response = await self._fill_node(ReviseOp, prompt, mode="xml_fill")
+        response = await self._fill_node(ReviseOp, prompt, mode="xml_fill", enable_thinking=enable_thinking)
         return response
 
 
@@ -384,7 +430,13 @@ class MdEnsemble(Operator):
         answer_mapping = {chr(65 + i): solutions.index(solution) for i, solution in enumerate(shuffled_solutions)}
         return shuffled_solutions, answer_mapping
 
-    async def __call__(self, solutions: List[str], problem: str, mode: str = None):
+    async def __call__(
+        self,
+        solutions: List[str],
+        problem: str,
+        mode: str = None,
+        enable_thinking: Optional[bool] = None,
+    ):
         logger.info(f"solution count: {len(solutions)}")
         all_responses = []
 
@@ -396,7 +448,12 @@ class MdEnsemble(Operator):
                 solution_text += f"{chr(65 + index)}: \n{str(solution)}\n\n\n"
 
             prompt = MD_ENSEMBLE_PROMPT.format(solutions=solution_text, question=problem)
-            response = await self._fill_node(MdEnsembleOp, prompt, mode="xml_fill")
+            response = await self._fill_node(
+                MdEnsembleOp,
+                prompt,
+                mode="xml_fill",
+                enable_thinking=enable_thinking,
+            )
 
             answer = response.get("solution_letter", "A")
             answer = answer.strip().upper()

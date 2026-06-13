@@ -107,12 +107,28 @@ class MBPPBenchmark(BaseBenchmark):
 
             # Log mismatch if the score is 0
             if score == 0:
-                self.log_mismatch(input_text, expected_output, prediction, score)
+                failure_type = "solution_timeout" if "timed out" in test_case_details.lower() else "wrong_answer"
+                self.log_mismatch(
+                    input_text,
+                    expected_output,
+                    prediction,
+                    score,
+                    failure_type=failure_type,
+                    error_message=test_case_details if failure_type == "solution_timeout" else "",
+                )
 
             return input_text, prediction, expected_output, score, cost
 
         except Exception as e:
             logger.info(f"Maximum retries reached. Skipping this sample. Error: {e}")
+            self.log_failure(
+                problem=input_text,
+                expected_output=expected_output,
+                prediction=str(e),
+                failure_type="graph_exception",
+                error_message=str(e),
+                details={"entry_point": data["entry_point"]},
+            )
             return input_text, str(e), expected_output, 0.0, 0.0
 
     def calculate_score(self, expected_output: str, prediction: str) -> Tuple[float, str]:

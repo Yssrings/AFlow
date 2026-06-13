@@ -75,6 +75,12 @@ class GraphUtils:
         for id, operator in enumerate(operators):
             operator_description = self._load_operator_description(id + 1, operator, path)
             operators_description += f"{operator_description}\n"
+        operators_description += (
+            "\nAll LLM-backed operators also accept optional keyword "
+            "`enable_thinking: Optional[bool] = None`. Omit it to use the global model config. "
+            "Use `enable_thinking=False` for cheap formatting, selection, or timeout-prone nodes, "
+            "and `enable_thinking=True` for nodes that need deeper reasoning.\n"
+        )
         return operators_description
 
     def _load_operator_description(self, id: int, operator_name: str, file_path: str) -> str:
