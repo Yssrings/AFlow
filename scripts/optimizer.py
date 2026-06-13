@@ -330,24 +330,7 @@ class Optimizer:
             logger.error(f"Generated graph calls uninitialized operators: {sorted(missing_ops)}")
             return False
 
-        if self.type == "code" and self._has_looped_code_generation(tree):
-            logger.error("Generated code graph loops over CustomCodeGenerate calls, which is likely to timeout.")
-            return False
-
         return True
-
-    @staticmethod
-    def _has_looped_code_generation(tree: ast.AST) -> bool:
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.For, ast.While, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
-                for child in ast.walk(node):
-                    if (
-                        isinstance(child, ast.Call)
-                        and isinstance(child.func, ast.Attribute)
-                        and child.func.attr == "custom_code_generate"
-                    ):
-                        return True
-        return False
 
     async def test(self):
         rounds = [1]  # You can choose the rounds you want to test here.
