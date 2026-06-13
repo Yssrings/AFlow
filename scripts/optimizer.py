@@ -143,6 +143,7 @@ class Optimizer:
         response = None
         sample = None
         processed_experience = None
+        candidate_directory = None
         while generation_attempts < max_generation_attempts:
             generation_attempts += 1
 
@@ -202,14 +203,36 @@ class Optimizer:
             )
 
             # If `check` is True, break the loop; otherwise, regenerate the graph
-            if check:
-                break
+            if not check:
+                continue
+
+            candidate_round = self.round + 1
+            candidate_directory = self.graph_utils.create_candidate_round_directory(
+                graph_path, candidate_round, generation_attempts
+            )
+            self.graph_utils.write_graph_files(candidate_directory, response, candidate_round, self.dataset)
+            try:
+                self.graph_utils.validate_round_files(
+                    candidate_directory,
+                    llm_config=self.execute_llm_config,
+                    dataset=self.dataset,
+                )
+            except Exception as e:
+                logger.error(f"Generated candidate round failed validation: {e}")
+                continue
+
+            break
         else:
             raise RuntimeError("Failed to generate a valid graph after retries.")
 
-        # Save the graph and evaluate
-        directory = self.graph_utils.create_round_directory(graph_path, self.round + 1)
-        self.graph_utils.write_graph_files(directory, response, self.round + 1, self.dataset)
+        # Promote the validated candidate to the official round and evaluate it.
+        directory = self.graph_utils.promote_candidate_round(
+            candidate_directory,
+            graph_path,
+            self.round + 1,
+            response,
+            self.dataset,
+        )
 
         experience = self.experience_utils.create_experience_data(sample, response["modification"])
 

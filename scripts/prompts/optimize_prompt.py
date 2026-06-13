@@ -33,6 +33,8 @@ Use custom methods to restrict your output format, rather than using code (outsi
 It is very important to format the Graph output answers, you can refer to the standard answer format in the log.
 You do not need to manually import prompt_custom or operator to use them; they are already included in the execution environment.
 Every self.xxx operator called in __call__ must be initialized as self.xxx in __init__.
+Initialize operators with the existing LLM instance, following the pattern `self.xxx = operator.OperatorName(self.llm)`.
+Every `prompt_custom.NAME` referenced by the graph must be defined as an active top-level string assignment in prompt_custom, not commented out.
 For code problems, avoid loops or multiple candidates around CustomCodeGenerate; local execution models are slow and such graphs frequently timeout. Prefer one code generation plus a lightweight Test repair step if needed.
 """
 
