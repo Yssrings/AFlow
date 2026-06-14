@@ -14,7 +14,8 @@ from scripts.utils.common import read_json_file, write_json_file
 
 class DataUtils:
     
-    DEFAULT_BEST_SELECTION_PROBABILITY = 0.7
+    DEFAULT_ALPHA = 0.2
+    DEFAULT_LAMBDA = 0.3
     DEFAULT_LOG_SAMPLES = 3
     DEFAULT_LOG_TOTAL_CHARS = 6000
     DEFAULT_LOG_FIELD_CHARS = {
@@ -76,7 +77,9 @@ class DataUtils:
             raise ValueError("Item list is empty.")
 
         sorted_items = sorted(items, key=lambda x: x["score"], reverse=True)
-        probabilities = self._compute_probabilities(len(sorted_items))
+        scores = [item["score"] * 100 for item in sorted_items]
+
+        probabilities = self._compute_probabilities(scores)
         logger.info(f"\nMixed probability distribution: {probabilities}")
         logger.info(f"\nSorted rounds: {sorted_items}")
 
@@ -86,25 +89,37 @@ class DataUtils:
         return sorted_items[selected_index]
 
     def _compute_probabilities(
-        self, 
-        item_count: int,
-        best_probability: float = DEFAULT_BEST_SELECTION_PROBABILITY,
+        self,
+        scores: List[float],
+        alpha: float = DEFAULT_ALPHA,
+        lambda_: float = DEFAULT_LAMBDA
     ) -> np.ndarray:
 
-        if item_count <= 0:
-            raise ValueError("Item count must be positive.")
-        if item_count == 1:
-            return np.array([1.0], dtype=np.float64)
-        if not 0.0 < best_probability < 1.0:
-            raise ValueError("Best-selection probability must be between 0 and 1.")
+        scores = np.array(scores, dtype=np.float64)
+        n = len(scores)
 
-        probabilities = np.full(
-            item_count,
-            (1.0 - best_probability) / (item_count - 1),
-            dtype=np.float64,
-        )
-        probabilities[0] = best_probability
-        return probabilities
+        if n == 0:
+            raise ValueError("Score list is empty.")
+
+        uniform_prob = np.full(n, 1.0 / n, dtype=np.float64)
+
+        max_score = np.max(scores)
+        shifted_scores = scores - max_score
+        exp_weights = np.exp(alpha * shifted_scores)
+
+        sum_exp_weights = np.sum(exp_weights)
+        if sum_exp_weights == 0:
+            raise ValueError("Sum of exponential weights is 0, cannot normalize.")
+
+        score_prob = exp_weights / sum_exp_weights
+
+        mixed_prob = lambda_ * uniform_prob + (1 - lambda_) * score_prob
+
+        total_prob = np.sum(mixed_prob)
+        if not np.isclose(total_prob, 1.0):
+            mixed_prob = mixed_prob / total_prob
+
+        return mixed_prob
 
     def load_log(self, cur_round: int, path: Optional[str] = None, mode: str = "Graph") -> str:
         if mode == "Graph":
