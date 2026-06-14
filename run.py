@@ -90,13 +90,13 @@ def parse_args():
         "--enable_eb_ucb_early_stop",
         type=parse_bool,
         default=True,
-        help="Whether to enable Empirical Bernstein UCB validation early stopping.",
+        help="Whether to enable Clopper-Pearson binomial UCB validation early stopping.",
     )
     parser.add_argument(
         "--eb_ucb_epsilon",
         type=float,
         default=0.05,
-        help="Failure probability epsilon for Empirical Bernstein UCB early stopping.",
+        help="Failure probability epsilon for Clopper-Pearson binomial UCB early stopping.",
     )
     parser.add_argument(
         "--if_force_download",

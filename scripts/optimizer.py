@@ -69,7 +69,7 @@ class Optimizer:
         self.enable_eb_ucb_early_stop = enable_eb_ucb_early_stop
         self.eb_ucb_epsilon = eb_ucb_epsilon
         if not 0.0 < self.eb_ucb_epsilon < 1.0:
-            raise ValueError("eb_ucb_epsilon must be between 0 and 1.")
+            raise ValueError("Clopper-Pearson early-stop epsilon must be between 0 and 1.")
         self._initial_evaluated = False
 
         self.graph_utils = GraphUtils(self.root_path)

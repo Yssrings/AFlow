@@ -59,8 +59,8 @@ For custom tasks, you can reference the code in the `benchmark` folder. Inherit 
      --max_rounds 20        # Max iteration rounds for AFLOW
      --check_convergence    # Whether to enable early stop
      --validation_rounds 5  # Validation rounds for AFLOW
-     --enable_eb_ucb_early_stop true  # Enable Empirical Bernstein UCB validation early stopping
-     --eb_ucb_epsilon 0.05  # Failure probability epsilon for EB-UCB early stopping
+     --enable_eb_ucb_early_stop true  # Enable Clopper-Pearson binomial UCB validation early stopping
+     --eb_ucb_epsilon 0.05  # Failure probability epsilon for Clopper-Pearson early stopping
      --if_force_download    # Force dataset download if set to True
      ```
 

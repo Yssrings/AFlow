@@ -39,7 +39,7 @@ class EvaluationUtils:
             incumbent_best_score = optimizer.data_utils.get_best_average_score(data, exclude_round=cur_round)
             if incumbent_best_score is not None:
                 logger.info(
-                    f"EB-UCB early-stop incumbent best score before round {cur_round}: "
+                    f"Clopper-Pearson early-stop incumbent best score before round {cur_round}: "
                     f"{incumbent_best_score:.5f}"
                 )
 
