@@ -21,11 +21,13 @@ MAX_NUM_SEQS="${MAX_NUM_SEQS:-4}"
 MAX_TOKENS="${MAX_TOKENS:-2048}"
 
 AFLOW_DATASETS="${AFLOW_DATASETS:-${AFLOW_DATASET:-HumanEval,MATH}}"
-AFLOW_SAMPLE="${AFLOW_SAMPLE:-2}"
+AFLOW_SAMPLE="${AFLOW_SAMPLE:-8}"
 AFLOW_INITIAL_ROUND="${AFLOW_INITIAL_ROUND:-1}"
 AFLOW_MAX_ROUNDS="${AFLOW_MAX_ROUNDS:-30}"
 AFLOW_VALIDATION_ROUNDS="${AFLOW_VALIDATION_ROUNDS:-1}"
 AFLOW_MAX_CONCURRENT_TASKS="${AFLOW_MAX_CONCURRENT_TASKS:-4}"
+AFLOW_ENABLE_EB_UCB_EARLY_STOP="${AFLOW_ENABLE_EB_UCB_EARLY_STOP:-true}"
+AFLOW_EB_UCB_EPSILON="${AFLOW_EB_UCB_EPSILON:-0.05}"
 AFLOW_OPTIMIZED_PATH="${AFLOW_OPTIMIZED_PATH:-workspace_vllm_qwen3_8b}"
 
 cd "${REPO_DIR}"
@@ -175,6 +177,8 @@ for dataset in "${AFLOW_DATASET_LIST[@]}"; do
         --max_rounds "${AFLOW_MAX_ROUNDS}" \
         --validation_rounds "${AFLOW_VALIDATION_ROUNDS}" \
         --max_concurrent_tasks "${AFLOW_MAX_CONCURRENT_TASKS}" \
+        --enable_eb_ucb_early_stop "${AFLOW_ENABLE_EB_UCB_EARLY_STOP}" \
+        --eb_ucb_epsilon "${AFLOW_EB_UCB_EPSILON}" \
         --if_force_download false \
         --opt_model_name "${SERVED_MODEL_NAME}" \
         --exec_model_name "${SERVED_MODEL_NAME}"

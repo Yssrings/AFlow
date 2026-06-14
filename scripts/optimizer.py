@@ -45,6 +45,8 @@ class Optimizer:
         max_rounds: int = 20,
         validation_rounds: int = 5,
         max_concurrent_tasks: int = 50,
+        enable_eb_ucb_early_stop: bool = True,
+        eb_ucb_epsilon: float = 0.05,
     ) -> None:
         self.optimize_llm_config = opt_llm_config
         self.optimize_llm = create_llm_instance(self.optimize_llm_config)
@@ -64,6 +66,10 @@ class Optimizer:
         self.max_rounds = max_rounds
         self.validation_rounds = validation_rounds
         self.max_concurrent_tasks = max_concurrent_tasks
+        self.enable_eb_ucb_early_stop = enable_eb_ucb_early_stop
+        self.eb_ucb_epsilon = eb_ucb_epsilon
+        if not 0.0 < self.eb_ucb_epsilon < 1.0:
+            raise ValueError("eb_ucb_epsilon must be between 0 and 1.")
         self._initial_evaluated = False
 
         self.graph_utils = GraphUtils(self.root_path)

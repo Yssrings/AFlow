@@ -14,8 +14,7 @@ from scripts.utils.common import read_json_file, write_json_file
 
 class DataUtils:
     
-    DEFAULT_ALPHA = 0.2
-    DEFAULT_LAMBDA = 0.3
+    DEFAULT_BEST_SELECTION_PROBABILITY = 0.7
     DEFAULT_LOG_SAMPLES = 3
     DEFAULT_LOG_TOTAL_CHARS = 6000
     DEFAULT_LOG_FIELD_CHARS = {
@@ -77,9 +76,7 @@ class DataUtils:
             raise ValueError("Item list is empty.")
 
         sorted_items = sorted(items, key=lambda x: x["score"], reverse=True)
-        scores = [item["score"] * 100 for item in sorted_items]
-
-        probabilities = self._compute_probabilities(scores)
+        probabilities = self._compute_probabilities(len(sorted_items))
         logger.info(f"\nMixed probability distribution: {probabilities}")
         logger.info(f"\nSorted rounds: {sorted_items}")
 
@@ -90,36 +87,24 @@ class DataUtils:
 
     def _compute_probabilities(
         self, 
-        scores: List[float], 
-        alpha: float = DEFAULT_ALPHA, 
-        lambda_: float = DEFAULT_LAMBDA
+        item_count: int,
+        best_probability: float = DEFAULT_BEST_SELECTION_PROBABILITY,
     ) -> np.ndarray:
 
-        scores = np.array(scores, dtype=np.float64)
-        n = len(scores)
+        if item_count <= 0:
+            raise ValueError("Item count must be positive.")
+        if item_count == 1:
+            return np.array([1.0], dtype=np.float64)
+        if not 0.0 < best_probability < 1.0:
+            raise ValueError("Best-selection probability must be between 0 and 1.")
 
-        if n == 0:
-            raise ValueError("Score list is empty.")
-
-        uniform_prob = np.full(n, 1.0 / n, dtype=np.float64)
-
-        max_score = np.max(scores)
-        shifted_scores = scores - max_score
-        exp_weights = np.exp(alpha * shifted_scores)
-
-        sum_exp_weights = np.sum(exp_weights)
-        if sum_exp_weights == 0:
-            raise ValueError("Sum of exponential weights is 0, cannot normalize.")
-
-        score_prob = exp_weights / sum_exp_weights
-
-        mixed_prob = lambda_ * uniform_prob + (1 - lambda_) * score_prob
-
-        total_prob = np.sum(mixed_prob)
-        if not np.isclose(total_prob, 1.0):
-            mixed_prob = mixed_prob / total_prob
-
-        return mixed_prob
+        probabilities = np.full(
+            item_count,
+            (1.0 - best_probability) / (item_count - 1),
+            dtype=np.float64,
+        )
+        probabilities[0] = best_probability
+        return probabilities
 
     def load_log(self, cur_round: int, path: Optional[str] = None, mode: str = "Graph") -> str:
         if mode == "Graph":
@@ -222,6 +207,24 @@ class DataUtils:
 
     def save_results(self, json_file_path: str, data: list) -> None:
         write_json_file(json_file_path, data, encoding="utf-8", indent=4)
+
+    def get_best_average_score(self, data: List[Dict[str, Any]], exclude_round: Optional[int] = None) -> Optional[float]:
+        scores_by_round: Dict[int, List[float]] = {}
+        for item in data:
+            try:
+                round_number = int(item["round"])
+                if exclude_round is not None and round_number == exclude_round:
+                    continue
+                score = float(item["score"])
+            except (KeyError, TypeError, ValueError):
+                continue
+
+            scores_by_round.setdefault(round_number, []).append(score)
+
+        if not scores_by_round:
+            return None
+
+        return max(sum(scores) / len(scores) for scores in scores_by_round.values())
 
     def _load_scores(self, path: Optional[str] = None, mode: str = "Graph") -> List[Dict]:
         if mode == "Graph":

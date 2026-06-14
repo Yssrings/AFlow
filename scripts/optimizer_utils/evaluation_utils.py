@@ -1,4 +1,5 @@
 from scripts.evaluator import Evaluator
+from scripts.logs import logger
 
 
 class EvaluationUtils:
@@ -18,6 +19,7 @@ class EvaluationUtils:
                 directory,
                 is_test=False,
                 max_concurrent_tasks=optimizer.max_concurrent_tasks,
+                eb_ucb_early_stop=None,
             )
 
             new_data = optimizer.data_utils.create_result_data(optimizer.round, score, avg_cost, total_cost)
@@ -31,8 +33,25 @@ class EvaluationUtils:
     async def evaluate_graph(self, optimizer, directory, validation_n, data, initial=False):
         evaluator = Evaluator(eval_path=directory)
         sum_score = 0
+        cur_round = optimizer.round if initial is True else optimizer.round + 1
+        incumbent_best_score = None
+        if not initial and optimizer.enable_eb_ucb_early_stop:
+            incumbent_best_score = optimizer.data_utils.get_best_average_score(data, exclude_round=cur_round)
+            if incumbent_best_score is not None:
+                logger.info(
+                    f"EB-UCB early-stop incumbent best score before round {cur_round}: "
+                    f"{incumbent_best_score:.5f}"
+                )
 
         for i in range(validation_n):
+            eb_ucb_early_stop = None
+            if not initial and optimizer.enable_eb_ucb_early_stop:
+                eb_ucb_early_stop = {
+                    "enabled": True,
+                    "epsilon": optimizer.eb_ucb_epsilon,
+                    "incumbent_best_score": incumbent_best_score,
+                }
+
             score, avg_cost, total_cost = await evaluator.graph_evaluate(
                 optimizer.dataset,
                 optimizer.graph,
@@ -40,9 +59,8 @@ class EvaluationUtils:
                 directory,
                 is_test=False,
                 max_concurrent_tasks=optimizer.max_concurrent_tasks,
+                eb_ucb_early_stop=eb_ucb_early_stop,
             )
-
-            cur_round = optimizer.round + 1 if initial is False else optimizer.round
 
             new_data = optimizer.data_utils.create_result_data(cur_round, score, avg_cost, total_cost)
             data.append(new_data)

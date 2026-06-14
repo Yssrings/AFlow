@@ -56,6 +56,10 @@ EXPERIMENT_CONFIGS: Dict[str, ExperimentConfig] = {
 }
 
 
+def parse_bool(value: str) -> bool:
+    return value.lower() in {"1", "true", "yes", "y", "on"}
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="AFlow Optimizer")
     parser.add_argument(
@@ -65,7 +69,7 @@ def parse_args():
         required=True,
         help="Dataset type",
     )
-    parser.add_argument("--sample", type=int, default=4, help="Sample count")
+    parser.add_argument("--sample", type=int, default=8, help="Sample count")
     parser.add_argument(
         "--optimized_path",
         type=str,
@@ -81,6 +85,18 @@ def parse_args():
         type=int,
         default=50,
         help="Max concurrent benchmark tasks during validation/test evaluation.",
+    )
+    parser.add_argument(
+        "--enable_eb_ucb_early_stop",
+        type=parse_bool,
+        default=True,
+        help="Whether to enable Empirical Bernstein UCB validation early stopping.",
+    )
+    parser.add_argument(
+        "--eb_ucb_epsilon",
+        type=float,
+        default=0.05,
+        help="Failure probability epsilon for Empirical Bernstein UCB early stopping.",
     )
     parser.add_argument(
         "--if_force_download",
@@ -138,6 +154,8 @@ if __name__ == "__main__":
         max_rounds=args.max_rounds,
         validation_rounds=args.validation_rounds,
         max_concurrent_tasks=args.max_concurrent_tasks,
+        enable_eb_ucb_early_stop=args.enable_eb_ucb_early_stop,
+        eb_ucb_epsilon=args.eb_ucb_epsilon,
     )
 
     # Optimize workflow via setting the optimizer's mode to 'Graph'

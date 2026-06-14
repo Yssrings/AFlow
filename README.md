@@ -53,12 +53,14 @@ For custom tasks, you can reference the code in the `benchmark` folder. Inherit 
    - Use command line arguments or modify default parameters in `run.py`:
      ```python
      --dataset              # (Required) Dataset type (HumanEval/MBPP/GSM8K/MATH/HotpotQA/DROP)
-     --sample 4             # Sample count - number of workflows to be resampled
+     --sample 8             # Sample count - number of workflows to be resampled
      --optimized_path PATH  # Optimized result save path
      --initial_round 1      # Initial round
      --max_rounds 20        # Max iteration rounds for AFLOW
      --check_convergence    # Whether to enable early stop
      --validation_rounds 5  # Validation rounds for AFLOW
+     --enable_eb_ucb_early_stop true  # Enable Empirical Bernstein UCB validation early stopping
+     --eb_ucb_epsilon 0.05  # Failure probability epsilon for EB-UCB early stopping
      --if_force_download    # Force dataset download if set to True
      ```
 

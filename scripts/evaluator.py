@@ -3,7 +3,7 @@
 # @Author  : all
 # @Desc    : Evaluation for different datasets
 
-from typing import Dict, Literal, Tuple
+from typing import Dict, Literal, Optional, Tuple
 
 from benchmarks.benchmark import BaseBenchmark
 from benchmarks.drop import DROPBenchmark
@@ -43,6 +43,7 @@ class Evaluator:
         path: str,
         is_test: bool = False,
         max_concurrent_tasks: int = 50,
+        eb_ucb_early_stop: Optional[dict] = None,
     ) -> Tuple[float, float, float]:
         if dataset not in self.dataset_configs:
             raise ValueError(f"Unsupported dataset: {dataset}")
@@ -57,7 +58,12 @@ class Evaluator:
             va_list = None  # For test data, generally use None to test all
         else:
             va_list = None  # Use None to test all Validation data, or set va_list (e.g., [1, 2, 3]) to use partial data
-        return await benchmark.run_evaluation(configured_graph, va_list, max_concurrent_tasks=max_concurrent_tasks)
+        return await benchmark.run_evaluation(
+            configured_graph,
+            va_list,
+            max_concurrent_tasks=max_concurrent_tasks,
+            eb_ucb_early_stop=eb_ucb_early_stop,
+        )
 
     async def _configure_graph(self, dataset, graph, params: dict):
         # Here you can configure the graph based on params
